@@ -6,12 +6,34 @@
 
 #if !defined(SDL_PLATFORM_MACOS) && !defined(SDL_PLATFORM_IOS) && !defined(SDL_PLATFORM_TVOS)
 #include <SDL3/SDL_video.h>
+#include <SDL3/SDL_vulkan.h>
 #endif
 
 namespace aurora::webgpu {
 namespace utils {
 
 std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptorCocoa(SDL_Window* window);
+
+#if defined(SDL_PLATFORM_LINUX)
+WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
+  static bool vulkanLoaderInitialized = false;
+  if (!vulkanLoaderInitialized) {
+    if (!SDL_Vulkan_LoadLibrary(nullptr)) {
+      return WGPU_FALSE;
+    }
+    vulkanLoaderInitialized = true;
+  }
+
+  VkSurfaceKHR nativeSurface{};
+  if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window*>(userdata), reinterpret_cast<VkInstance>(instance),
+                                nullptr, &nativeSurface)) {
+    return WGPU_FALSE;
+  }
+
+  *surface = reinterpret_cast<void*>(nativeSurface);
+  return WGPU_TRUE;
+}
+#endif
 
 std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Window* window) {
 #if defined(SDL_PLATFORM_MACOS) || defined(SDL_PLATFORM_IOS) || defined(SDL_PLATFORM_TVOS)
@@ -33,6 +55,12 @@ std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Wind
   return std::move(desc);
 #elif defined(SDL_PLATFORM_LINUX)
   const char* driver = SDL_GetCurrentVideoDriver();
+  if (SDL_strcmp(driver, "kmsdrm") == 0) {
+    auto desc = std::make_shared<wgpu::SurfaceSourceKmsdrm>();
+    desc->userdata = window;
+    desc->createSurface = create_kmsdrm_surface;
+    return desc;
+  }
   if (SDL_strcmp(driver, "wayland") == 0) {
     std::shared_ptr<wgpu::SurfaceSourceWaylandSurface> desc = std::make_shared<wgpu::SurfaceSourceWaylandSurface>();
     desc->display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, nullptr);

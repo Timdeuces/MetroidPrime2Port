@@ -365,6 +365,12 @@ bool create_window(AuroraBackend backend) {
     flags |= SDL_WINDOW_FULLSCREEN;
   }
 #endif
+#if defined(SDL_PLATFORM_LINUX)
+  const char* videoDriver = SDL_GetCurrentVideoDriver();
+  if (videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0) {
+    flags |= SDL_WINDOW_VULKAN | SDL_WINDOW_FULLSCREEN;
+  }
+#endif
   auto width = static_cast<Sint32>(g_config.windowWidth);
   auto height = static_cast<Sint32>(g_config.windowHeight);
   if (width == 0 || height == 0) {

@@ -49,6 +49,7 @@ jobs:
             libXrandr-devel libXcursor-devel libXi-devel libXfixes-devel \
             libXScrnSaver-devel libXtst-devel wayland-devel wayland-protocols-devel \
             libxkbcommon-devel mesa-libEGL-devel mesa-libGL-devel \
+            libdrm-devel mesa-libgbm-devel \
             freetype-devel libpng-devel zlib-devel bzip2-devel brotli-devel \
             libzstd-devel openssl-devel ccache \
             systemd-devel libusb1-devel
@@ -56,6 +57,12 @@ jobs:
         with:
           # The version string is `git describe`; it needs the tags.
           fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Timdeuces/dawn
+          ref: mpp
+          path: DawnKmsdrm
+          fetch-depth: 1
       # ccache keeps the objects between runs, and the unpacked dependency
       # sources skip the downloads in Configure, as in windows.yml.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -75,7 +82,10 @@ jobs:
           source /opt/rh/gcc-toolset-14/enable
           cmake -S . -B build/port-gcc -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DMP_SDK_HEADERS_ONLY=OFF -DAURORA_ENABLE_TESTS=OFF
+            -DMP_SDK_HEADERS_ONLY=OFF -DAURORA_ENABLE_TESTS=OFF \
+            -DAURORA_DAWN_PROVIDER=vendor -DAURORA_SDL3_PROVIDER=vendor \
+            -DFETCHCONTENT_SOURCE_DIR_DAWN="$GITHUB_WORKSPACE/DawnKmsdrm" \
+            -DSDL_KMSDRM=ON
       - name: Build
         run: |
           source /opt/rh/gcc-toolset-14/enable
