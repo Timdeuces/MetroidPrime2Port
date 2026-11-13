@@ -44,7 +44,7 @@ jobs:
           dnf install -y epel-release dnf-plugins-core
           dnf config-manager --set-enabled crb
           dnf install -y --allowerasing gcc-toolset-14-gcc gcc-toolset-14-gcc-c++ \
-            cmake ninja-build git curl file findutils binutils python3 \
+            cmake ninja-build git curl file findutils binutils python3 python3-pip \
             alsa-lib-devel pulseaudio-libs-devel libX11-devel libXinerama-devel libXext-devel \
             libXrandr-devel libXcursor-devel libXi-devel libXfixes-devel \
             libXScrnSaver-devel libXtst-devel wayland-devel wayland-protocols-devel \
@@ -53,6 +53,8 @@ jobs:
             freetype-devel libpng-devel zlib-devel bzip2-devel brotli-devel \
             libzstd-devel openssl-devel ccache \
             systemd-devel libusb1-devel
+          python3 -m pip install --user --upgrade "ninja>=1.11"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The version string is `git describe`; it needs the tags.
