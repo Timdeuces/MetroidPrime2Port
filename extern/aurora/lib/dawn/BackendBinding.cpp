@@ -19,6 +19,7 @@ WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
   static bool vulkanLoaderInitialized = false;
   if (!vulkanLoaderInitialized) {
     if (!SDL_Vulkan_LoadLibrary(nullptr)) {
+      SDL_Log("KMSDRM: SDL_Vulkan_LoadLibrary failed: %s", SDL_GetError());
       return WGPU_FALSE;
     }
     vulkanLoaderInitialized = true;
@@ -27,6 +28,7 @@ WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
   VkSurfaceKHR nativeSurface{};
   if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window*>(userdata), reinterpret_cast<VkInstance>(instance),
                                 nullptr, &nativeSurface)) {
+    SDL_Log("KMSDRM: SDL_Vulkan_CreateSurface failed: %s", SDL_GetError());
     return WGPU_FALSE;
   }
 
