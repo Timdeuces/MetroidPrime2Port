@@ -45,7 +45,7 @@ jobs:
           dnf config-manager --set-enabled crb
           dnf install -y --allowerasing gcc-toolset-14-gcc gcc-toolset-14-gcc-c++ \
             cmake ninja-build git curl file findutils binutils python3 \
-            alsa-lib-devel pulseaudio-libs-devel libX11-devel libXext-devel \
+            alsa-lib-devel pulseaudio-libs-devel libX11-devel libXinerama-devel libXext-devel \
             libXrandr-devel libXcursor-devel libXi-devel libXfixes-devel \
             libXScrnSaver-devel libXtst-devel wayland-devel wayland-protocols-devel \
             libxkbcommon-devel mesa-libEGL-devel mesa-libGL-devel \
