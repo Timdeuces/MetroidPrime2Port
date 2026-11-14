@@ -4,6 +4,8 @@
 
 #include <memory>
 
+#include "../window.hpp"
+
 #if !defined(SDL_PLATFORM_MACOS) && !defined(SDL_PLATFORM_IOS) && !defined(SDL_PLATFORM_TVOS)
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
@@ -41,9 +43,9 @@ WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
 #if defined(WEBGPU_DAWN)
 WGPUBool get_kmsdrm_egl_surface(void* userdata, void** surface) {
   auto* window = static_cast<SDL_Window*>(userdata);
-  SDL_EGLSurface eglSurface = SDL_EGL_GetWindowSurface(window);
+  void* eglSurface = window::get_kmsdrm_egl_surface(window);
   if (eglSurface == nullptr) {
-    SDL_Log("KMSDRM: SDL_EGL_GetWindowSurface failed: %s", SDL_GetError());
+    SDL_Log("KMSDRM: no SDL-created EGL draw surface is available for Dawn");
     return WGPU_FALSE;
   }
   *surface = eglSurface;

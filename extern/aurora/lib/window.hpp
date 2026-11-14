@@ -41,6 +41,7 @@ const AuroraEvent* poll_events();
 // How long the last poll_events spent in SDL_UpdateJoysticks.
 uint64_t joystick_update_ns() noexcept;
 SDL_Window* get_sdl_window();
+void* get_kmsdrm_egl_surface(SDL_Window* window) noexcept;
 SDL_Renderer* get_sdl_renderer();
 const void* get_native_window_handle() noexcept;
 bool is_paused() noexcept;

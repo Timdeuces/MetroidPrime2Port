@@ -50,6 +50,7 @@ constexpr Module Log{"aurora::window"};
 SDL_Window* g_window;
 SDL_Renderer* g_renderer;
 SDL_GLContext g_glContext;
+void* g_kmsdrmEglSurface;
 float g_frameBufferScale = 0.f;
 bool g_frameBufferAspectFit = false;
 AuroraWindowSize g_windowSize;
@@ -445,6 +446,29 @@ bool create_window(AuroraBackend backend) {
       g_window = nullptr;
       return false;
     }
+    if (videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0) {
+      using EGLGetCurrentSurfaceProc = SDL_EGLSurface (*)(int);
+      const auto getCurrentSurface = reinterpret_cast<EGLGetCurrentSurfaceProc>(
+          SDL_EGL_GetProcAddress("eglGetCurrentSurface"));
+      if (getCurrentSurface == nullptr) {
+        Log.error("Failed to load eglGetCurrentSurface from SDL's EGL library: {}", SDL_GetError());
+        SDL_GL_DestroyContext(g_glContext);
+        g_glContext = nullptr;
+        SDL_DestroyWindow(g_window);
+        g_window = nullptr;
+        return false;
+      }
+      g_kmsdrmEglSurface = getCurrentSurface(0x3059);
+      if (g_kmsdrmEglSurface == nullptr) {
+        Log.error("SDL KMSDRM EGL context has no current draw surface");
+        SDL_GL_DestroyContext(g_glContext);
+        g_glContext = nullptr;
+        SDL_DestroyWindow(g_window);
+        g_window = nullptr;
+        return false;
+      }
+      Log.info("Captured SDL's KMSDRM EGL draw surface for Dawn");
+    }
   }
 #endif
   SDL_SetWindowMinimumSize(g_window, 640, 480);
@@ -482,6 +506,7 @@ void destroy_window() {
     SDL_DestroyWindow(g_window);
     g_window = nullptr;
   }
+  g_kmsdrmEglSurface = nullptr;
 }
 
 void show_window() {
@@ -602,6 +627,9 @@ AuroraWindowSize get_window_size() {
 }
 
 SDL_Window* get_sdl_window() { return g_window; }
+void* get_kmsdrm_egl_surface(SDL_Window* window) noexcept {
+  return window == g_window ? g_kmsdrmEglSurface : nullptr;
+}
 
 const void* get_native_window_handle() noexcept {
   if (g_window == nullptr) {
