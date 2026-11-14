@@ -21,6 +21,7 @@
 #include <magic_enum.hpp>
 #include <webgpu/webgpu_cpp.h>
 #include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_video.h>
 
 #include "../gx/gx.hpp"
 #include "../gfx/frame.hpp"
@@ -34,6 +35,7 @@
 #ifdef WEBGPU_DAWN
 #include "../dawn/TracyPlatform.hpp"
 #include <dawn/native/DawnNative.h>
+#include <dawn/native/OpenGLBackend.h>
 #include "../gfx/texture_sites.hpp"
 #endif
 
@@ -1086,17 +1088,37 @@ static bool initialize_once(AuroraBackend auroraBackend, bool allowCpu) {
     const bool forceGL33 = backend == wgpu::BackendType::OpenGL && glVersion != nullptr &&
                            std::string_view{glVersion} == "3.3";
     static constexpr std::array adapterToggles{"gl_force_desktop_gl_33"};
-    const wgpu::DawnTogglesDescriptor adapterTogglesDescriptor{wgpu::DawnTogglesDescriptor::Init{
+    wgpu::DawnTogglesDescriptor adapterTogglesDescriptor{wgpu::DawnTogglesDescriptor::Init{
         .enabledToggleCount = adapterToggles.size(),
         .enabledToggles = adapterToggles.data(),
     }};
     if (forceGL33) {
       Log.info("MP2_GL_VERSION=3.3: forcing an OpenGL 3.3 core context");
     }
+    dawn::native::opengl::RequestAdapterOptionsGetGLProc getGLProcOptions;
+    const wgpu::ChainedStruct* adapterOptionsChain = nullptr;
+    const char* videoDriver = SDL_GetCurrentVideoDriver();
+    const bool useSDLKmsdrmEGL = videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0 &&
+                                 (backend == wgpu::BackendType::OpenGL ||
+                                  backend == wgpu::BackendType::OpenGLES);
+    if (useSDLKmsdrmEGL) {
+      getGLProcOptions.getProc = reinterpret_cast<dawn::native::opengl::EGLGetProcProc>(SDL_EGL_GetProcAddress);
+      getGLProcOptions.display = SDL_EGL_GetCurrentDisplay();
+      if (getGLProcOptions.display == nullptr) {
+        Log.error("SDL has no initialized KMSDRM EGL display: {}", SDL_GetError());
+        return false;
+      }
+      adapterOptionsChain = &getGLProcOptions;
+      Log.info("Using SDL's KMSDRM EGL display for Dawn OpenGL");
+    }
+    if (forceGL33) {
+      adapterTogglesDescriptor.nextInChain = adapterOptionsChain;
+      adapterOptionsChain = &adapterTogglesDescriptor;
+    }
 #endif
     const wgpu::RequestAdapterOptions options{
 #ifdef WEBGPU_DAWN
-        .nextInChain = forceGL33 ? &adapterTogglesDescriptor : nullptr,
+        .nextInChain = adapterOptionsChain,
 #endif
         .featureLevel = wgpu::FeatureLevel::Compatibility,
         .powerPreference = lowPower ? wgpu::PowerPreference::LowPower : wgpu::PowerPreference::HighPerformance,

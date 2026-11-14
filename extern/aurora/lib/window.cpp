@@ -49,6 +49,7 @@ constexpr Module Log{"aurora::window"};
 
 SDL_Window* g_window;
 SDL_Renderer* g_renderer;
+SDL_GLContext g_glContext;
 float g_frameBufferScale = 0.f;
 bool g_frameBufferAspectFit = false;
 AuroraWindowSize g_windowSize;
@@ -368,7 +369,21 @@ bool create_window(AuroraBackend backend) {
 #if defined(SDL_PLATFORM_LINUX)
   const char* videoDriver = SDL_GetCurrentVideoDriver();
   if (videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0) {
-    flags |= SDL_WINDOW_VULKAN | SDL_WINDOW_FULLSCREEN;
+    flags |= SDL_WINDOW_FULLSCREEN;
+    if (backend == BACKEND_VULKAN) {
+      flags |= SDL_WINDOW_VULKAN;
+    } else if (backend == BACKEND_OPENGL || backend == BACKEND_OPENGLES) {
+      flags |= SDL_WINDOW_OPENGL;
+      if (backend == BACKEND_OPENGLES) {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+      } else {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+      }
+    }
   }
 #endif
   auto width = static_cast<Sint32>(g_config.windowWidth);
@@ -421,6 +436,17 @@ bool create_window(AuroraBackend backend) {
     Log.error("Failed to create window: {}", SDL_GetError());
     return false;
   }
+#if defined(SDL_PLATFORM_LINUX)
+  if ((flags & SDL_WINDOW_OPENGL) != 0) {
+    g_glContext = SDL_GL_CreateContext(g_window);
+    if (g_glContext == nullptr) {
+      Log.error("Failed to create KMSDRM GL context: {}", SDL_GetError());
+      SDL_DestroyWindow(g_window);
+      g_window = nullptr;
+      return false;
+    }
+  }
+#endif
   SDL_SetWindowMinimumSize(g_window, 640, 480);
   set_window_icon();
   return true;
@@ -449,6 +475,10 @@ void destroy_window() {
     g_renderer = nullptr;
   }
   if (g_window != nullptr) {
+    if (g_glContext != nullptr) {
+      SDL_GL_DestroyContext(g_glContext);
+      g_glContext = nullptr;
+    }
     SDL_DestroyWindow(g_window);
     g_window = nullptr;
   }

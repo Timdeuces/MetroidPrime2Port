@@ -5,6 +5,7 @@
 #include <memory>
 
 #if !defined(SDL_PLATFORM_MACOS) && !defined(SDL_PLATFORM_IOS) && !defined(SDL_PLATFORM_TVOS)
+#include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_video.h>
 #include <SDL3/SDL_vulkan.h>
@@ -36,6 +37,27 @@ WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
   *surface = reinterpret_cast<void*>(nativeSurface);
   return WGPU_TRUE;
 }
+
+#if defined(WEBGPU_DAWN)
+WGPUBool get_kmsdrm_egl_surface(void* userdata, void** surface) {
+  auto* window = static_cast<SDL_Window*>(userdata);
+  SDL_EGLSurface eglSurface = SDL_EGL_GetWindowSurface(window);
+  if (eglSurface == nullptr) {
+    SDL_Log("KMSDRM: SDL_EGL_GetWindowSurface failed: %s", SDL_GetError());
+    return WGPU_FALSE;
+  }
+  *surface = eglSurface;
+  return WGPU_TRUE;
+}
+
+WGPUBool present_kmsdrm_egl_surface(void* userdata) {
+  if (!SDL_GL_SwapWindow(static_cast<SDL_Window*>(userdata))) {
+    SDL_Log("KMSDRM: SDL_GL_SwapWindow failed: %s", SDL_GetError());
+    return WGPU_FALSE;
+  }
+  return WGPU_TRUE;
+}
+#endif
 #endif
 
 std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Window* window) {
@@ -62,6 +84,10 @@ std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Wind
     auto desc = std::make_shared<wgpu::SurfaceSourceKmsdrm>();
     desc->userdata = window;
     desc->createSurface = create_kmsdrm_surface;
+  #if defined(WEBGPU_DAWN)
+    desc->getEGLSurface = get_kmsdrm_egl_surface;
+    desc->present = present_kmsdrm_egl_surface;
+  #endif
     return desc;
   }
   if (SDL_strcmp(driver, "wayland") == 0) {
