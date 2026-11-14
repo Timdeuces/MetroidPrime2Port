@@ -49,33 +49,11 @@ _sdl_replace([=[                    _this->egl_data->egl_display = _this->egl_da
 ]=] "EGL extension platform route")
 
 _sdl_replace([=[        } else {
-                        if (SDL_EGL_HasExtension(_this, SDL_EGL_CLIENT_EXTENSION, "EGL_EXT_platform_base")) {
-                                _this->egl_data->eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)SDL_EGL_GetProcAddressInternal(_this, "eglGetPlatformDisplayEXT");
-                                if (_this->egl_data->eglGetPlatformDisplayEXT) {
-                                        _this->egl_data->egl_display = _this->egl_data->eglGetPlatformDisplayEXT(platform, (void *)(uintptr_t)native_display, NULL);
-                                }
-                        }
-                }
-        }
-#endif
-        // Try the implementation-specific eglGetDisplay even if eglGetPlatformDisplay fails
-]=] [=[        } else if (SDL_EGL_HasExtension(_this, SDL_EGL_CLIENT_EXTENSION, "EGL_EXT_platform_base")) {
-                        _this->egl_data->eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)SDL_EGL_GetProcAddressInternal(_this, "eglGetPlatformDisplayEXT");
-                        if (_this->egl_data->eglGetPlatformDisplayEXT) {
-                                SDL_Log("SDL EGL GBM route: using eglGetPlatformDisplayEXT");
-                                _this->egl_data->egl_display = _this->egl_data->eglGetPlatformDisplayEXT(platform, (void *)(uintptr_t)native_display, NULL);
-                                SDL_Log("SDL EGL GBM route: eglGetPlatformDisplayEXT returned %p",
-                                                (void *)(uintptr_t)_this->egl_data->egl_display);
-                        } else {
-                                SDL_Log("SDL EGL GBM route: eglGetPlatformDisplayEXT proc unavailable");
-                        }
-                } else {
-                        SDL_Log("SDL EGL GBM route: EGL_EXT_platform_base unavailable");
-                }
-        }
-#endif
-        // Try the implementation-specific eglGetDisplay even if eglGetPlatformDisplay fails
-]=] "platform extension fallback log")
+            if (SDL_EGL_HasExtension(_this, SDL_EGL_CLIENT_EXTENSION, "EGL_EXT_platform_base")) {
+]=] [=[        } else {
+            SDL_Log("SDL EGL GBM route: core eglGetPlatformDisplay unavailable; checking EGL_EXT_platform_base");
+            if (SDL_EGL_HasExtension(_this, SDL_EGL_CLIENT_EXTENSION, "EGL_EXT_platform_base")) {
+]=] "EGL extension route selection")
 
 _sdl_replace([=[    if ((_this->egl_data->egl_display == EGL_NO_DISPLAY) &&
         (_this->egl_data->eglGetDisplay) &&
