@@ -160,6 +160,8 @@ elseif (_aurora_sdl3_provider STREQUAL "vendor")
         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-x11-device-changed.cmake"
       COMMAND ${CMAKE_COMMAND} -DSDL_SOURCE_DIR=<SOURCE_DIR>
         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-kmsdrm-egl-diagnostics.cmake"
+      COMMAND ${CMAKE_COMMAND} -DSDL_SOURCE_DIR=<SOURCE_DIR>
+        -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-egl-init-diagnostics.cmake"
       EXCLUDE_FROM_ALL
     )
     FetchContent_MakeAvailable(SDL)
