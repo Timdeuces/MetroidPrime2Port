@@ -53,8 +53,18 @@ WGPUBool get_kmsdrm_egl_surface(void* userdata, void** surface) {
 }
 
 WGPUBool present_kmsdrm_egl_surface(void* userdata) {
-  if (!SDL_GL_SwapWindow(static_cast<SDL_Window*>(userdata))) {
+  if (!window::make_kmsdrm_gl_context_current(true)) {
+    SDL_Log("KMSDRM: failed to make SDL's GL context current for presentation: %s", SDL_GetError());
+    return WGPU_FALSE;
+  }
+  const bool swapped = SDL_GL_SwapWindow(static_cast<SDL_Window*>(userdata));
+  const bool released = window::make_kmsdrm_gl_context_current(false);
+  if (!swapped) {
     SDL_Log("KMSDRM: SDL_GL_SwapWindow failed: %s", SDL_GetError());
+    return WGPU_FALSE;
+  }
+  if (!released) {
+    SDL_Log("KMSDRM: failed to release SDL's GL context after presentation: %s", SDL_GetError());
     return WGPU_FALSE;
   }
   return WGPU_TRUE;

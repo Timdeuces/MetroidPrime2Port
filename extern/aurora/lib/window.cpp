@@ -468,6 +468,15 @@ bool create_window(AuroraBackend backend) {
         return false;
       }
       Log.info("Captured SDL's KMSDRM EGL draw surface for Dawn");
+      if (!SDL_GL_MakeCurrent(nullptr, nullptr)) {
+        Log.error("Failed to release SDL's KMSDRM GL context after surface capture: {}", SDL_GetError());
+        SDL_GL_DestroyContext(g_glContext);
+        g_glContext = nullptr;
+        SDL_DestroyWindow(g_window);
+        g_window = nullptr;
+        g_kmsdrmEglSurface = nullptr;
+        return false;
+      }
     }
   }
 #endif
@@ -629,6 +638,12 @@ AuroraWindowSize get_window_size() {
 SDL_Window* get_sdl_window() { return g_window; }
 void* get_kmsdrm_egl_surface(SDL_Window* window) noexcept {
   return window == g_window ? g_kmsdrmEglSurface : nullptr;
+}
+bool make_kmsdrm_gl_context_current(bool current) noexcept {
+  if (g_window == nullptr || g_glContext == nullptr) {
+    return false;
+  }
+  return SDL_GL_MakeCurrent(current ? g_window : nullptr, current ? g_glContext : nullptr);
 }
 
 const void* get_native_window_handle() noexcept {
