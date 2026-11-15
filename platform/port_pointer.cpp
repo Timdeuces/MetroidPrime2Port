@@ -7,8 +7,9 @@
 
 #include "port_mouse.h"
 #include "port_overlay.h"
+#include "port_time.h"
 
-#include <SDL3/SDL.h>
+#include <SDL2/SDL.h>
 
 #include <algorithm>
 #include <atomic>
@@ -20,7 +21,7 @@ namespace PortPointer {
 namespace {
 
 Recognizer sGestures;
-SDL_WindowID sWindowId = 0;
+Uint32 sWindowId = 0;
 std::atomic< double > sScreenActiveTime{-1.0};  // also read on Android's UI thread (port_touch_jni.cpp)
 bool sScriptMoved = false;
 // A console "down … touch" holds the script finger until "up".
@@ -29,7 +30,7 @@ bool sScriptFingerDown = false;
 constexpr uint64_t kScriptFinger0 = 0xfffffffffff00000ull;
 constexpr uint64_t kScriptFinger1 = kScriptFinger0 + 1;
 
-double Now() { return static_cast< double >(SDL_GetTicksNS()) * 1e-9; }
+double Now() { return static_cast< double >(PortTime::NowNs()) * 1e-9; }
 float NowF() { return static_cast< float >(Now()); }
 
 SDL_Window* Window() {
@@ -43,7 +44,7 @@ SDL_Window* Window() {
   return window;
 }
 
-void NoteWindow(SDL_WindowID id) {
+void NoteWindow(Uint32 id) {
   if (id != 0) {
     sWindowId = id;
   }
@@ -63,8 +64,9 @@ bool GetLayout(Layout& out) {
     return false;
   }
   int pw = 0, ph = 0, xw = 0, xh = 0;
-  if (!SDL_GetWindowSize(window, &pw, &ph) || !SDL_GetWindowSizeInPixels(window, &xw, &xh) ||
-      pw <= 0 || ph <= 0 || xw <= 0 || xh <= 0) {
+  SDL_GetWindowSize(window, &pw, &ph);
+  SDL_GL_GetDrawableSize(window, &xw, &xh);
+  if (pw <= 0 || ph <= 0 || xw <= 0 || xh <= 0) {
     return false;
   }
   const GXRenderModeObj& mode = CGraphics::GetRenderMode();
@@ -81,7 +83,7 @@ bool GetLayout(Layout& out) {
   return out.present.width > 0.f;
 }
 
-void WindowPoint(SDL_WindowID id, float nx, float ny, float& x, float& y) {
+void WindowPoint(Uint32 id, float nx, float ny, float& x, float& y) {
   SDL_Window* window = id != 0 ? SDL_GetWindowFromID(id) : Window();
   int w = 0, h = 0;
   if (window != nullptr) {
@@ -104,7 +106,7 @@ uint8_t ButtonBit(Uint8 sdlButton) {
   }
 }
 
-bool SynthesizedMouse(SDL_MouseID which) { return which == SDL_TOUCH_MOUSEID || which == SDL_PEN_MOUSEID; }
+bool SynthesizedMouse(Uint32 which) { return which == SDL_TOUCH_MOUSEID; }
 
 } // namespace
 
@@ -122,67 +124,64 @@ Recognizer& Gestures() { return sGestures; }
 void HandleEvent(const SDL_Event& e) {
   const float t = NowF();
   switch (e.type) {
-  case SDL_EVENT_MOUSE_MOTION:
+  case SDL_MOUSEMOTION:
     if (!SynthesizedMouse(e.motion.which)) {
       NoteWindow(e.motion.windowID);
       sGestures.MouseMove(e.motion.x, e.motion.y, t);
     }
     break;
-  case SDL_EVENT_MOUSE_BUTTON_DOWN:
-  case SDL_EVENT_MOUSE_BUTTON_UP:
+  case SDL_MOUSEBUTTONDOWN:
+  case SDL_MOUSEBUTTONUP:
     if (!SynthesizedMouse(e.button.which)) {
       if (const uint8_t bit = ButtonBit(e.button.button)) {
         NoteWindow(e.button.windowID);
-        sGestures.MouseButton(bit, e.button.down, e.button.x, e.button.y, t);
+        sGestures.MouseButton(bit, e.button.state == SDL_PRESSED, e.button.x, e.button.y, t);
       }
     }
     break;
-  case SDL_EVENT_MOUSE_WHEEL:
+  case SDL_MOUSEWHEEL:
     if (!SynthesizedMouse(e.wheel.which)) {
       const float notches = e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -e.wheel.y : e.wheel.y;
       sGestures.Wheel(notches, t);
     }
     break;
-  case SDL_EVENT_FINGER_DOWN:
-  case SDL_EVENT_FINGER_MOTION:
-  case SDL_EVENT_FINGER_UP: {
+  case SDL_FINGERDOWN:
+  case SDL_FINGERMOTION:
+  case SDL_FINGERUP: {
     // SDL's mobile default (SDL_HINT_MOUSE_TOUCH_EVENTS) echoes every mouse press as a touch;
     // the mouse events above already carry it, and as a touch it would pass for a finger tap
     // (a captured-mouse fire click opening the map from the minimap).
-    if (e.tfinger.touchID == SDL_MOUSE_TOUCHID) {
+    if (e.tfinger.touchId == SDL_MOUSE_TOUCHID) {
       break;
     }
     NoteWindow(e.tfinger.windowID);
     float x = 0.f, y = 0.f;
     WindowPoint(e.tfinger.windowID, e.tfinger.x, e.tfinger.y, x, y);
-    if (e.type == SDL_EVENT_FINGER_DOWN) {
-      sGestures.FingerDown(e.tfinger.fingerID, x, y, t);
-    } else if (e.type == SDL_EVENT_FINGER_MOTION) {
-      sGestures.FingerMove(e.tfinger.fingerID, x, y, t);
+    if (e.type == SDL_FINGERDOWN) {
+      sGestures.FingerDown(e.tfinger.fingerId, x, y, t);
+    } else if (e.type == SDL_FINGERMOTION) {
+      sGestures.FingerMove(e.tfinger.fingerId, x, y, t);
     } else {
-      sGestures.FingerUp(e.tfinger.fingerID, x, y, t);
+      sGestures.FingerUp(e.tfinger.fingerId, x, y, t);
     }
     break;
   }
-  case SDL_EVENT_FINGER_CANCELED:
-    sGestures.CancelTouches();
-    break;
-  case SDL_EVENT_KEY_DOWN:
+  case SDL_KEYDOWN:
     if (!e.key.repeat) {
       sGestures.NoteOtherDevice();
     }
     break;
-  case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-  case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+  case SDL_CONTROLLERBUTTONDOWN:
+  case SDL_JOYBUTTONDOWN:
     sGestures.NoteOtherDevice();
     break;
-  case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-    if (e.gaxis.value > 16000 || e.gaxis.value < -16000) {
+  case SDL_CONTROLLERAXISMOTION:
+    if (e.caxis.value > 16000 || e.caxis.value < -16000) {
       sGestures.NoteOtherDevice();
     }
     break;
-  case SDL_EVENT_WINDOW_FOCUS_LOST:
-    sGestures.Reset();
+  case SDL_WINDOWEVENT:
+    if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) sGestures.Reset();
     break;
   default:
     break;
@@ -558,7 +557,7 @@ bool TakeTap() {
   // fire clicks would land on the minimap wherever that cursor drifted; only touch taps it then.
   SDL_Window* window = PortPointer::Window();
   const bool captured = PortMouse::Captured() ||
-                        (window != nullptr && SDL_GetWindowRelativeMouseMode(window));
+                        (window != nullptr && SDL_GetRelativeMouseMode() == SDL_TRUE);
   if (!g.PeekClick(click) || click.button != PortPointer::kButtonLeft ||
       (captured && click.device == PortPointer::Device::Mouse) ||
       !PortPointer::WindowToGui(click.x, click.y, gx, gy) || gx < sRect[0] || gx > sRect[2] ||

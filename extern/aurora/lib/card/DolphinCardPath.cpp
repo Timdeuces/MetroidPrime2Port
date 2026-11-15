@@ -14,7 +14,7 @@
 #include <shlobj_core.h>
 #endif
 
-#include <SDL3/SDL_filesystem.h>
+#include <SDL2/SDL.h>
 
 #include "../internal.hpp"
 

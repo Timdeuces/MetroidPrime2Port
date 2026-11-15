@@ -10,8 +10,7 @@
 #include <vector>
 
 #include <webgpu/webgpu_cpp.h>
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_render.h>
+#include <SDL2/SDL.h>
 
 #include "internal.hpp"
 #include "gfx/render_worker.hpp"
@@ -19,8 +18,8 @@
 #include "window.hpp"
 
 #define IMGUI_IMPL_WEBGPU_BACKEND_DAWN
-#include "backends/imgui_impl_sdl3.h"
-#include "backends/imgui_impl_sdlrenderer3.h"
+#include "backends/imgui_impl_sdl2.h"
+#include "backends/imgui_impl_sdlrenderer2.h"
 #include "backends/imgui_impl_wgpu.h"
 #include "tracy/Tracy.hpp"
 #include "gfx/texture_sites.hpp"
@@ -103,15 +102,15 @@ void create_context() noexcept {
 void initialize() noexcept {
   ZoneScoped;
   SDL_Renderer* renderer = window::get_sdl_renderer();
-  ImGui_ImplSDL3_InitForSDLRenderer(window::get_sdl_window(), renderer);
+  ImGui_ImplSDL2_InitForSDLRenderer(window::get_sdl_window(), renderer);
   // The application feeds the gamepad keys itself (it knows which pad is the
   // player's and remaps some inputs). Two writers that disagree about one key
   // each queue a change per frame while ImGui applies one, so the input queue
   // grows and everything behind it, mouse clicks included, arrives late.
-  ImGui_ImplSDL3_SetGamepadMode(ImGui_ImplSDL3_GamepadMode_Manual, nullptr, 0);
+  ImGui_ImplSDL2_SetGamepadMode(ImGui_ImplSDL2_GamepadMode_Manual, nullptr, 0);
   g_useSdlRenderer = renderer != nullptr;
   if (g_useSdlRenderer) {
-    ImGui_ImplSDLRenderer3_Init(renderer);
+    ImGui_ImplSDLRenderer2_Init(renderer);
   } else {
     ImGui_ImplWGPU_InitInfo info;
     info.Device = webgpu::g_device.Get();
@@ -123,11 +122,11 @@ void initialize() noexcept {
 void shutdown() noexcept {
   ZoneScoped;
   if (g_useSdlRenderer) {
-    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDLRenderer2_Shutdown();
   } else {
     ImGui_ImplWGPU_Shutdown();
   }
-  ImGui_ImplSDL3_Shutdown();
+  ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
   for (const auto& texture : g_sdlTextures) {
     SDL_DestroyTexture(texture);
@@ -137,13 +136,7 @@ void shutdown() noexcept {
 }
 
 void process_event(const SDL_Event& event) noexcept {
-  auto renderEvent = event;
-  if (g_useSdlRenderer) {
-    if (SDL_Renderer* renderer = window::get_sdl_renderer()) {
-      SDL_ConvertEventToRenderCoordinates(renderer, &renderEvent);
-    }
-  }
-  ImGui_ImplSDL3_ProcessEvent(&renderEvent);
+  ImGui_ImplSDL2_ProcessEvent(&event);
 }
 
 bool wants_capture_event(const SDL_Event& event) noexcept {
@@ -153,18 +146,17 @@ bool wants_capture_event(const SDL_Event& event) noexcept {
 
   const ImGuiIO& io = ImGui::GetIO();
   switch (event.type) {
-  case SDL_EVENT_MOUSE_MOTION:
-  case SDL_EVENT_MOUSE_BUTTON_DOWN:
-  case SDL_EVENT_MOUSE_BUTTON_UP:
-  case SDL_EVENT_MOUSE_WHEEL:
-  case SDL_EVENT_FINGER_DOWN:
-  case SDL_EVENT_FINGER_MOTION:
-  case SDL_EVENT_FINGER_UP:
-  case SDL_EVENT_FINGER_CANCELED:
+  case SDL_MOUSEMOTION:
+  case SDL_MOUSEBUTTONDOWN:
+  case SDL_MOUSEBUTTONUP:
+  case SDL_MOUSEWHEEL:
+  case SDL_FINGERDOWN:
+  case SDL_FINGERMOTION:
+  case SDL_FINGERUP:
     return io.WantCaptureMouse;
-  case SDL_EVENT_KEY_DOWN:
-  case SDL_EVENT_KEY_UP:
-  case SDL_EVENT_TEXT_INPUT:
+  case SDL_KEYDOWN:
+  case SDL_KEYUP:
+  case SDL_TEXTINPUT:
     return io.WantCaptureKeyboard || io.WantTextInput;
   default:
     return false;
@@ -183,12 +175,12 @@ void new_frame(const AuroraWindowSize& size) noexcept {
     if (SDL_Renderer* renderer = window::get_sdl_renderer()) {
       float renderScaleX = 1.0f;
       float renderScaleY = 1.0f;
-      SDL_GetRenderScale(renderer, &renderScaleX, &renderScaleY);
+      SDL_RenderGetScale(renderer, &renderScaleX, &renderScaleY);
       if (renderScaleX > 0.0f && renderScaleY > 0.0f &&
           (std::fabs(renderScaleX - 1.0f) > 0.0001f || std::fabs(renderScaleY - 1.0f) > 0.0001f)) {
         int outputWidth = static_cast<int>(size.native_fb_width);
         int outputHeight = static_cast<int>(size.native_fb_height);
-        SDL_GetRenderOutputSize(renderer, &outputWidth, &outputHeight);
+        SDL_GetRendererOutputSize(renderer, &outputWidth, &outputHeight);
         displaySize = {
             static_cast<float>(outputWidth) / renderScaleX,
             static_cast<float>(outputHeight) / renderScaleY,
@@ -196,7 +188,7 @@ void new_frame(const AuroraWindowSize& size) noexcept {
         framebufferScale = {renderScaleX, renderScaleY};
       }
     }
-    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDLRenderer2_NewFrame();
     g_scale = size.scale;
   } else {
     if (g_scale != size.scale) {
@@ -212,7 +204,7 @@ void new_frame(const AuroraWindowSize& size) noexcept {
   }
   // With no pads of its own the backend clears HasGamepad; keep the app's.
   const ImGuiBackendFlags hasGamepad = ImGui::GetIO().BackendFlags & ImGuiBackendFlags_HasGamepad;
-  ImGui_ImplSDL3_NewFrame();
+  ImGui_ImplSDL2_NewFrame();
   ImGui::GetIO().BackendFlags |= hasGamepad;
 
   ImGuiIO& io = ImGui::GetIO();
@@ -251,7 +243,7 @@ void render(const wgpu::RenderPassEncoder& pass, const DrawData& drawData) noexc
   if (g_useSdlRenderer) {
     SDL_Renderer* renderer = window::get_sdl_renderer();
     SDL_RenderClear(renderer);
-    ImGui_ImplSDLRenderer3_RenderDrawData(data, renderer);
+    ImGui_ImplSDLRenderer2_RenderDrawData(data, renderer);
     SDL_RenderPresent(renderer);
   } else {
     pass.PushDebugGroup("Aurora: Dear Imgui");
@@ -264,7 +256,7 @@ ImTextureID add_texture(uint32_t width, uint32_t height, const uint8_t* data) no
   if (SDL_Renderer* renderer = window::get_sdl_renderer()) {
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, width, height);
     SDL_UpdateTexture(texture, nullptr, data, width * 4);
-    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+    SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
     g_sdlTextures.push_back(texture);
     return reinterpret_cast<ImTextureID>(texture);
   }

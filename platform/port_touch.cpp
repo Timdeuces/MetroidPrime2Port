@@ -27,12 +27,13 @@
 #include "MetroidPrime/Player/CGameState.hpp"
 #include "MetroidPrime/Player/CPlayerState.hpp"
 
-#include <SDL3/SDL.h>
+#include <SDL2/SDL.h>
 #include "port_touch_activity.h"
 #include <aurora/gfx.h>
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -42,6 +43,12 @@
 #include <string>
 
 namespace {
+
+uint64_t NowNs() {
+  return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                   std::chrono::steady_clock::now().time_since_epoch())
+                                   .count());
+}
 
 // MP1's defaults (platform/include/port_input_settings.h there). The default layout is MP1's
 // Default one - the left stick, the face buttons, drag-to-aim and the visor/beam wheels - which
@@ -372,8 +379,8 @@ PortTouchPad::Pad& Pad() {
     // repoints fd 2 at logcat (platform/main.cpp), so this reaches the same place and still
     // compiles for the host, which has no android/log.h.
     if (sPad.ok()) {
-      std::fprintf(stderr, "[touch] pad attached id=%d gamepad=%d\n", static_cast< int >(sPad.id),
-                   SDL_IsGamepad(sPad.id) ? 1 : 0);
+      std::fprintf(stderr, "[touch] pad attached id=%d gamepad=%d\n", static_cast<int>(sPad.id),
+           SDL_IsGameController(sPad.id) ? 1 : 0);
     } else {
       sPadAttachFailed = true;
       std::fprintf(stderr, "[touch] pad attach failed: %s (retried every frame)\n", SDL_GetError());
@@ -390,7 +397,7 @@ void PadButton(int button, bool down) {
   if (DebugPad()) {
     std::fprintf(stderr, "[touch] button %d %s\n", button, down ? "down" : "up");
   }
-  SDL_SetJoystickVirtualButton(pad.handle, button, down);
+  SDL_JoystickSetVirtualButton(pad.handle, button, down ? SDL_PRESSED : SDL_RELEASED);
 }
 
 // The player the wheels act on: player 0's state while the game is in play (MP1's wheels are
@@ -473,24 +480,23 @@ void UpdateTurbo(bool enabled) {
     sTurboStartNs = 0;
     return;
   }
-  const uint64_t now = SDL_GetTicksNS();
+  const uint64_t now = NowNs();
   if (sTurboStartNs == 0) {
     sTurboStartNs = now;
   }
   sTurboDown.store(((now - sTurboStartNs) / kTurboHalfNs) % 2 == 0, std::memory_order_release);
 }
 
-bool SDLCALL RadialLifecycleWatch(void*, SDL_Event* event) {
-  if (event->type == SDL_EVENT_WILL_ENTER_BACKGROUND ||
-      event->type == SDL_EVENT_DID_ENTER_BACKGROUND ||
-      event->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+int SDLCALL RadialLifecycleWatch(void*, SDL_Event* event) {
+  if (event->type == SDL_APP_WILLENTERBACKGROUND || event->type == SDL_APP_DIDENTERBACKGROUND ||
+      (event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_FOCUS_LOST)) {
     sRadialTouchForeground.store(false, std::memory_order_release);
     PortRadial::CancelTouchLifecycle();
-  } else if (event->type == SDL_EVENT_DID_ENTER_FOREGROUND ||
-             event->type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+  } else if (event->type == SDL_APP_DIDENTERFOREGROUND ||
+             (event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_FOCUS_GAINED)) {
     sRadialTouchForeground.store(true, std::memory_order_release);
   }
-  return true;
+  return 1;
 }
 
 } // namespace
@@ -508,7 +514,10 @@ void Initialize(const std::string& userDirectory) {
 }
 
 void BeginFrame() {
-  static const bool watching = SDL_AddEventWatch(RadialLifecycleWatch, nullptr);
+  static const bool watching = [] {
+    SDL_AddEventWatch(RadialLifecycleWatch, nullptr);
+    return true;
+  }();
   (void)watching;
   ReadEnvironment();
   LoadConfig();
@@ -533,16 +542,13 @@ void BeginFrame() {
   // A pad that is not this overlay's own is a real one; while one is connected the overlay
   // steps aside (MP1 does the same), which is what `TakePhysicalInput` reports.
   {
-    int count = 0;
+    const int count = SDL_NumJoysticks();
     bool real = false;
-    if (SDL_JoystickID* ids = SDL_GetJoysticks(&count)) {
-      for (int i = 0; i < count; ++i) {
-        if (!SDL_IsJoystickVirtual(ids[i])) {
-          real = true;
-          break;
-        }
+    for (int i = 0; i < count; ++i) {
+      if (SDL_JoystickIsVirtual(i) != SDL_TRUE) {
+        real = true;
+        break;
       }
-      SDL_free(ids);
     }
     sRealPad.store(real, std::memory_order_release);
   }
@@ -606,14 +612,14 @@ void SetAxis(int axis, float value) {
     return;
   }
   // Reported once per move, not once per pixel, so the log stays readable.
-  static float lastLogged[SDL_GAMEPAD_AXIS_COUNT] = {};
-  if (DebugPad() && axis >= 0 && axis < SDL_GAMEPAD_AXIS_COUNT &&
+  static float lastLogged[SDL_CONTROLLER_AXIS_MAX] = {};
+  if (DebugPad() && axis >= 0 && axis < SDL_CONTROLLER_AXIS_MAX &&
       std::fabs(value - lastLogged[axis]) > 0.02f) {
     lastLogged[axis] = value;
     std::fprintf(stderr, "[touch] axis %d %.2f\n", axis, value);
   }
   // The overlay sends a normalised -1..1 deflection; the virtual joystick takes a Sint16.
-  SDL_SetJoystickVirtualAxis(pad.handle, axis, PortTouchPad::AxisValue(value));
+  SDL_JoystickSetVirtualAxis(pad.handle, axis, PortTouchPad::AxisValue(value));
 }
 
 void AddAim(float dxDp, float dyDp) {
@@ -637,11 +643,11 @@ void SpringSwipe() {
 }
 
 bool SpringBallRequested(int player) {
-  return ValidPlayer(player) && SDL_GetTicksNS() < sSpringRequestUntilNs[player].load();
+  return ValidPlayer(player) && NowNs() < sSpringRequestUntilNs[player].load();
 }
 
 void RequestSpringBall(float seconds, int player) {
-  if (ValidPlayer(player)) sSpringRequestUntilNs[player].store(SDL_GetTicksNS() + uint64_t(seconds * 1e9f));
+  if (ValidPlayer(player)) sSpringRequestUntilNs[player].store(NowNs() + uint64_t(seconds * 1e9f));
 }
 
 void ClearSpringBallRequest(int player) {
@@ -651,13 +657,13 @@ void ClearSpringBallRequest(int player) {
 std::atomic< uint64_t > sDodgeRequestUntilNs[kPlayers]{};
 
 void RequestDodge(int player) {
-  if (ValidPlayer(player)) sDodgeRequestUntilNs[player].store(SDL_GetTicksNS() + 120'000'000);
+  if (ValidPlayer(player)) sDodgeRequestUntilNs[player].store(NowNs() + 120'000'000);
 }
 
 bool TakeDodgeRequest(int player) {
   if (!ValidPlayer(player)) return false;
   const uint64_t until = sDodgeRequestUntilNs[player].exchange(0);
-  return SDL_GetTicksNS() < until && !PortOverlay::OriginalExperience();
+  return NowNs() < until && !PortOverlay::OriginalExperience();
 }
 
 std::atomic< uint64_t > sTargetCycleUntilNs[kPlayers]{};
@@ -666,13 +672,13 @@ std::atomic< int > sTargetCycleDir[kPlayers]{};
 void RequestTargetCycle(int dir, int player) {
   if (!ValidPlayer(player)) return;
   sTargetCycleDir[player].store(dir > 0 ? 1 : -1);
-  sTargetCycleUntilNs[player].store(SDL_GetTicksNS() + 120'000'000);
+  sTargetCycleUntilNs[player].store(NowNs() + 120'000'000);
 }
 
 int TakeTargetCycle(int player) {
   if (!ValidPlayer(player)) return 0;
   const uint64_t until = sTargetCycleUntilNs[player].exchange(0);
-  if (SDL_GetTicksNS() >= until || PortOverlay::OriginalExperience()) return 0;
+  if (NowNs() >= until || PortOverlay::OriginalExperience()) return 0;
   return sTargetCycleDir[player].load();
 }
 

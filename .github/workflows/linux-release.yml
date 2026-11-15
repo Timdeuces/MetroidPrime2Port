@@ -85,9 +85,9 @@ jobs:
           cmake -S . -B build/port-gcc -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMP_SDK_HEADERS_ONLY=OFF -DAURORA_ENABLE_TESTS=OFF \
-            -DAURORA_DAWN_PROVIDER=vendor -DAURORA_SDL3_PROVIDER=vendor \
+            -DAURORA_DAWN_PROVIDER=vendor -DAURORA_SDL2_PROVIDER=system \
             -DFETCHCONTENT_SOURCE_DIR_DAWN="$GITHUB_WORKSPACE/DawnKmsdrm" \
-            -DSDL_KMSDRM=ON
+            -DSDL_KMSDRM=OFF
       - name: Build
         run: |
           source /opt/rh/gcc-toolset-14/enable

@@ -16,7 +16,7 @@
 #include "MetroidPrime/Player/CGameOptions.hpp"
 #include "MetroidPrime/Player/CGameState.hpp"
 
-#include <SDL3/SDL_gamepad.h>
+#include <SDL2/SDL_gamecontroller.h>
 #include <dolphin/pad.h>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -25,6 +25,22 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+
+namespace {
+bool IsVirtualController(SDL_GameController* controller) {
+  SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controller);
+  if (joystick == nullptr) {
+    return false;
+  }
+  const SDL_JoystickID instance = SDL_JoystickInstanceID(joystick);
+  for (int index = 0; index < SDL_NumJoysticks(); ++index) {
+    if (SDL_JoystickGetDeviceInstanceID(index) == instance) {
+      return SDL_JoystickIsVirtual(index) == SDL_TRUE;
+    }
+  }
+  return false;
+}
+} // namespace
 
 namespace PortDebug {
 
@@ -337,8 +353,8 @@ void DrawControlsController() {
     ImGui::EndDisabled();
   }
   const s32 controllerIndex = PADGetIndexForPort(PAD_CHAN0);
-  if (SDL_Gamepad* pad = controllerIndex >= 0 ? PADGetSDLGamepadForIndex(static_cast< u32 >(controllerIndex)) : nullptr;
-      pad != nullptr && SDL_IsJoystickVirtual(SDL_GetGamepadID(pad))) {
+  if (SDL_GameController* pad = controllerIndex >= 0 ? PADGetSDLGamepadForIndex(static_cast< u32 >(controllerIndex)) : nullptr;
+      pad != nullptr && IsVirtualController(pad)) {
     // Aurora ignores mappings on the virtual touch pad.
     ImGui::TextWrapped("The touch controls always use the GameCube layout; presets and remaps apply to "
                        "real controllers only.");

@@ -31,9 +31,7 @@
 #include "MetroidPrime/Player/CGameState.hpp"
 
 #include <aurora/aurora.h>
-#include <SDL3/SDL_dialog.h>
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_misc.h>
+#include <SDL2/SDL.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -48,7 +46,6 @@
 #include <thread>
 #if defined(__ANDROID__)
 #include <jni.h>
-#include <SDL3/SDL_system.h>
 #endif
 
 namespace PortDebug {
@@ -259,8 +256,8 @@ void SetTexturePackStatus(std::string status) {
 // MetroidPrime2Activity.pickTexturePack opens the system folder picker and copies the chosen folder
 // in the background, reporting back through nativeTexturePackStatus / nativeTexturePackReady.
 void PickTexturePack() {
-  JNIEnv* env = static_cast< JNIEnv* >(SDL_GetAndroidJNIEnv());
-  jobject activity = static_cast< jobject >(SDL_GetAndroidActivity());
+  JNIEnv* env = static_cast< JNIEnv* >(SDL_AndroidGetJNIEnv());
+  jobject activity = static_cast< jobject >(SDL_AndroidGetActivity());
   if (env == nullptr || activity == nullptr) {
     SetTexturePackStatus("Could not open the folder picker.");
     return;
@@ -326,23 +323,9 @@ void ImportTexturePackZip(std::string zipPath, std::string root) {
 }
 
 void OpenTexturePackZipDialog() {
-  int windowCount = 0;
-  SDL_Window** windows = SDL_GetWindows(&windowCount);
-  SDL_Window* window = windows != nullptr && windowCount > 0 ? windows[0] : nullptr;
-  SDL_free(windows);
-  static const SDL_DialogFileFilter filters[] = {
-      {"Zip archives", "zip"},
-      {"All files", "*"},
-  };
-  const SDL_DialogFileCallback done = [](void*, const char* const* files, int) {
-    std::lock_guard lock(sTexturePackZipMutex);
-    // Empty = cancelled; a leading \x01 marks a failed dialog's error.
-    sTexturePackZipPick = files != nullptr ? std::string(files[0] != nullptr ? files[0] : "")
-                                           : std::string("\x01") + SDL_GetError();
-    sTexturePackZipDialogOpen = false;
-  };
-  sTexturePackZipDialogOpen = true;
-  SDL_ShowOpenFileDialog(done, nullptr, window, filters, 2, nullptr, false);
+  std::lock_guard lock(sTexturePackZipMutex);
+  sTexturePackZipPick = std::string("\x01") + "Native file picking is unavailable in the SDL2 build.";
+  sTexturePackZipDialogOpen = false;
 }
 
 // Starts the extraction for a pick the dialog delivered.
@@ -530,7 +513,7 @@ void DrawSettingsSection() {
             ImGui::GetIO().IniFilename = nullptr;
           }
           SDL_Event quit{};
-          quit.type = SDL_EVENT_QUIT;
+          quit.type = SDL_QUIT;
           SDL_PushEvent(&quit);
           ImGui::CloseCurrentPopup();
         }

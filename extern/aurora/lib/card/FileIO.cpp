@@ -1,8 +1,7 @@
 #include "FileIO.hpp"
 
-#include <SDL3/SDL_filesystem.h>
-
 #include <limits>
+#include <system_error>
 #include <utility>
 
 #include "../io.hpp"
@@ -14,7 +13,7 @@ FileIO::FileIO(const std::filesystem::path& filename, bool truncate) : m_path(fi
     return;
   }
   auto stream = io::open_file(m_path, truncate ? "w+b" : "r+b");
-  m_ready = stream && SDL_CloseIO(stream.release());
+  m_ready = stream && SDL_RWclose(stream.release()) == 0;
 }
 
 FileIO::FileIO(FileIO&& other) noexcept {
@@ -47,17 +46,17 @@ bool FileIO::fileWrite(const void* buf, size_t length, off_t offset) {
 }
 
 size_t FileIO::fileSize() const {
-  SDL_PathInfo info;
-  const auto path = io::fs_path_to_string(m_path);
-  if (SDL_GetPathInfo(path.c_str(), &info) && info.size <= std::numeric_limits<size_t>::max()) {
-    return static_cast<size_t>(info.size);
+  std::error_code error;
+  const auto size = std::filesystem::file_size(m_path, error);
+  if (!error && size <= std::numeric_limits<size_t>::max()) {
+    return static_cast<size_t>(size);
   }
   return 0;
 }
 
 bool FileIO::deleteFile() {
-  const auto path = io::fs_path_to_string(m_path);
-  if (SDL_RemovePath(path.c_str())) {
+  std::error_code error;
+  if (std::filesystem::remove(m_path, error) && !error) {
     m_ready = false;
     m_path.clear();
     return true;

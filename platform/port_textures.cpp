@@ -6,11 +6,12 @@
 #include "port_embedded.h"
 #include "port_prompts.h"
 #include "port_steam_triton.h"
+#include "port_time.h"
 
 #include <dolphin/gx.h>
 #include <dolphin/pad.h>
 #include <aurora/texture.hpp>
-#include <SDL3/SDL_timer.h>
+#include <SDL2/SDL_timer.h>
 
 #include <atomic>
 #include <chrono>
@@ -368,11 +369,11 @@ void Poll() {
     return;
   }
   sDevice = device;
-  const uint64_t startNs = SDL_GetTicksNS();
+  const uint64_t startNs = PortTime::NowNs();
   Load(sBuiltIn, false);
   LoadUser(false);
   std::fprintf(stderr, "[textures] switched the texture set to '%s' in %llu ms\n", device,
-                 static_cast<unsigned long long>((SDL_GetTicksNS() - startNs) / 1000000ull));
+                 static_cast<unsigned long long>((PortTime::NowNs() - startNs) / 1000000ull));
 }
 
 void RequestUserPackReload() { sUserPending.store(true, std::memory_order_release); }

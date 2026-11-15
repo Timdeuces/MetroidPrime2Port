@@ -3,14 +3,14 @@
 #include <aurora/webgpu.hpp>
 
 #include <memory>
+#include <cstring>
 
 #include "../window.hpp"
 
-#if !defined(SDL_PLATFORM_MACOS) && !defined(SDL_PLATFORM_IOS) && !defined(SDL_PLATFORM_TVOS)
-#include <SDL3/SDL_error.h>
-#include <SDL3/SDL_log.h>
-#include <SDL3/SDL_video.h>
-#include <SDL3/SDL_vulkan.h>
+#if !defined(__APPLE__) && !defined(__ANDROID__)
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_syswm.h>
+#include <SDL2/SDL_vulkan.h>
 #endif
 
 namespace aurora::webgpu {
@@ -18,7 +18,7 @@ namespace utils {
 
 std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptorCocoa(SDL_Window* window);
 
-#if defined(SDL_PLATFORM_LINUX)
+#if defined(__linux__)
 WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
   static bool vulkanLoaderInitialized = false;
   if (!vulkanLoaderInitialized) {
@@ -31,7 +31,7 @@ WGPUBool create_kmsdrm_surface(void* userdata, void* instance, void** surface) {
 
   VkSurfaceKHR nativeSurface{};
   if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window*>(userdata), reinterpret_cast<VkInstance>(instance),
-                                nullptr, &nativeSurface)) {
+                                &nativeSurface)) {
     SDL_Log("KMSDRM: SDL_Vulkan_CreateSurface failed: %s", SDL_GetError());
     return WGPU_FALSE;
   }
@@ -57,12 +57,8 @@ WGPUBool present_kmsdrm_egl_surface(void* userdata) {
     SDL_Log("KMSDRM: failed to make SDL's GL context current for presentation: %s", SDL_GetError());
     return WGPU_FALSE;
   }
-  const bool swapped = SDL_GL_SwapWindow(static_cast<SDL_Window*>(userdata));
+  SDL_GL_SwapWindow(static_cast<SDL_Window*>(userdata));
   const bool released = window::make_kmsdrm_gl_context_current(false);
-  if (!swapped) {
-    SDL_Log("KMSDRM: SDL_GL_SwapWindow failed: %s", SDL_GetError());
-    return WGPU_FALSE;
-  }
   if (!released) {
     SDL_Log("KMSDRM: failed to release SDL's GL context after presentation: %s", SDL_GetError());
     return WGPU_FALSE;
@@ -76,23 +72,32 @@ std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Wind
 #if defined(SDL_PLATFORM_MACOS) || defined(SDL_PLATFORM_IOS) || defined(SDL_PLATFORM_TVOS)
   return SetupWindowAndGetSurfaceDescriptorCocoa(window);
 #else
-  const auto props = SDL_GetWindowProperties(window);
-#if defined(SDL_PLATFORM_ANDROID)
+#if defined(__ANDROID__)
+  SDL_SysWMinfo wmInfo{};
+  SDL_VERSION(&wmInfo.version);
+  if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
+    return nullptr;
+  }
   std::shared_ptr<wgpu::SurfaceSourceAndroidNativeWindow> desc =
       std::make_shared<wgpu::SurfaceSourceAndroidNativeWindow>();
-  desc->window = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, nullptr);
+  desc->window = wmInfo.info.android.window;
   if (desc->window == nullptr) {
     return nullptr; // Port: no surface yet (or already destroyed); CreateAndroidSurfaceKHR would crash
   }
   return std::move(desc);
-#elif defined(SDL_PLATFORM_WIN32)
+#elif defined(_WIN32)
+  SDL_SysWMinfo wmInfo{};
+  SDL_VERSION(&wmInfo.version);
+  if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
+    return nullptr;
+  }
   std::shared_ptr<wgpu::SurfaceSourceWindowsHWND> desc = std::make_shared<wgpu::SurfaceSourceWindowsHWND>();
-  desc->hwnd = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
-  desc->hinstance = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, nullptr);
+  desc->hwnd = wmInfo.info.win.window;
+  desc->hinstance = wmInfo.info.win.hinstance;
   return std::move(desc);
-#elif defined(SDL_PLATFORM_LINUX)
+#elif defined(__linux__)
   const char* driver = SDL_GetCurrentVideoDriver();
-  if (SDL_strcmp(driver, "kmsdrm") == 0) {
+  if (driver != nullptr && std::strcmp(driver, "kmsdrm") == 0) {
     auto desc = std::make_shared<wgpu::SurfaceSourceKmsdrm>();
     desc->userdata = window;
     desc->createSurface = create_kmsdrm_surface;
@@ -102,16 +107,21 @@ std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Wind
   #endif
     return desc;
   }
-  if (SDL_strcmp(driver, "wayland") == 0) {
+  SDL_SysWMinfo wmInfo{};
+  SDL_VERSION(&wmInfo.version);
+  if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
+    return nullptr;
+  }
+  if (wmInfo.subsystem == SDL_SYSWM_WAYLAND) {
     std::shared_ptr<wgpu::SurfaceSourceWaylandSurface> desc = std::make_shared<wgpu::SurfaceSourceWaylandSurface>();
-    desc->display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, nullptr);
-    desc->surface = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, nullptr);
+    desc->display = wmInfo.info.wl.display;
+    desc->surface = wmInfo.info.wl.surface;
     return std::move(desc);
   }
-  if (SDL_strcmp(driver, "x11") == 0) {
+  if (wmInfo.subsystem == SDL_SYSWM_X11) {
     std::shared_ptr<wgpu::SurfaceSourceXlibWindow> desc = std::make_shared<wgpu::SurfaceSourceXlibWindow>();
-    desc->display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, nullptr);
-    desc->window = SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
+    desc->display = wmInfo.info.x11.display;
+    desc->window = wmInfo.info.x11.window;
     return std::move(desc);
   }
 #endif

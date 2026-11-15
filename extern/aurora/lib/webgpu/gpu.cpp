@@ -20,8 +20,7 @@
 #include <aurora/gfx.h>
 #include <magic_enum.hpp>
 #include <webgpu/webgpu_cpp.h>
-#include <SDL3/SDL_timer.h>
-#include <SDL3/SDL_video.h>
+#include <SDL2/SDL.h>
 
 #include "../gx/gx.hpp"
 #include "../gfx/frame.hpp"
@@ -1102,8 +1101,8 @@ static bool initialize_once(AuroraBackend auroraBackend, bool allowCpu) {
                                  (backend == wgpu::BackendType::OpenGL ||
                                   backend == wgpu::BackendType::OpenGLES);
     if (useSDLKmsdrmEGL) {
-      getGLProcOptions.getProc = reinterpret_cast<dawn::native::opengl::EGLGetProcProc>(SDL_EGL_GetProcAddress);
-      getGLProcOptions.display = SDL_EGL_GetCurrentDisplay();
+      getGLProcOptions.getProc = reinterpret_cast<dawn::native::opengl::EGLGetProcProc>(window::get_kmsdrm_egl_proc);
+      getGLProcOptions.display = window::get_kmsdrm_egl_display();
       if (getGLProcOptions.display == nullptr) {
         Log.error("SDL has no initialized KMSDRM EGL display: {}", SDL_GetError());
         return false;
