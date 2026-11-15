@@ -359,7 +359,7 @@ bool create_window(AuroraBackend backend) {
     flags |= SDL_WINDOW_FULLSCREEN;
   }
 #endif
-#if defined(SDL_PLATFORM_LINUX)
+#if defined(__linux__)
   const char* videoDriver = SDL_GetCurrentVideoDriver();
   if (videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0) {
     flags |= SDL_WINDOW_FULLSCREEN;
@@ -414,7 +414,7 @@ bool create_window(AuroraBackend backend) {
     Log.error("Failed to create window: {}", SDL_GetError());
     return false;
   }
-#if defined(SDL_PLATFORM_LINUX)
+#if defined(__linux__)
   if ((flags & SDL_WINDOW_OPENGL) != 0) {
     g_glContext = SDL_GL_CreateContext(g_window);
     if (g_glContext == nullptr) {
