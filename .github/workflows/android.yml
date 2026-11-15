@@ -70,9 +70,10 @@ jobs:
           "$cmake" -S "$src" -B build/dawn-host -G Ninja \
             -C "$src/.github/workflows/dawn-ci.cmake" -DCMAKE_BUILD_TYPE=Release
           "$cmake" --build build/dawn-host --target protoc --config Release
+          # The initial cache chooses platform settings as it is loaded.
           "$cmake" -S "$src" -B build/dawn-android -G Ninja \
-            -C "$src/.github/workflows/dawn-ci.cmake" -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=Android \
+            -C "$src/.github/workflows/dawn-ci.cmake" -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
