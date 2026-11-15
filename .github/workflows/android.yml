@@ -39,8 +39,9 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
-      # Signed with the project's own key, so the APK installs over a release
-      # without an uninstall (which would delete the save).
+      # Use the project key when configured, so the APK installs over a release
+      # without an uninstall (which would delete the save). For personal builds
+      # with no release key, android_apk.sh uses the local debug key instead.
       - name: Build
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -48,17 +49,37 @@ jobs:
           MP_APK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           MP_APK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          export MP_APK_KEYSTORE="$RUNNER_TEMP/release.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$MP_APK_KEYSTORE"
-          bash tools/android_apk.sh --strict-signing :app:assembleRelease
-          rm -f "$MP_APK_KEYSTORE"
-      # A different signer would make Android treat the APK as another app.
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$MP_APK_KEYSTORE_PASSWORD" ] &&
+             [ -n "$MP_APK_KEY_ALIAS" ] && [ -n "$MP_APK_KEY_PASSWORD" ]; then
+            export MP_APK_KEYSTORE="$RUNNER_TEMP/release.jks"
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$MP_APK_KEYSTORE"
+            trap 'rm -f "$MP_APK_KEYSTORE"' EXIT
+            bash tools/android_apk.sh --strict-signing :app:assembleRelease
+          elif [ -z "$KEYSTORE_BASE64$MP_APK_KEYSTORE_PASSWORD$MP_APK_KEY_ALIAS$MP_APK_KEY_PASSWORD" ]; then
+            echo "No release signing secrets configured; building a personal-use APK with the debug key."
+            bash tools/android_apk.sh :app:assembleRelease
+          else
+            echo "::error::Release signing is partially configured; set all four Android signing secrets or clear them all."
+            exit 1
+          fi
+      # A project-key build must retain the release identity. A debug-key build
+      # only needs to be signed to allow personal sideloading.
       - name: Check the signer
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          MP_APK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MP_APK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MP_APK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           apk=android/app/build/outputs/apk/release/app-release.apk
           digest=$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           echo "signer: $digest"
-          test "$digest" = 5c380a13d5bfc5c57a093a22d2ec70d62109a927f76b0bf7fe61db7d5428bd20
+          test -n "$digest"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            test "$digest" = 5c380a13d5bfc5c57a093a22d2ec70d62109a927f76b0bf7fe61db7d5428bd20
+          else
+            echo "Debug-signed APK is for personal sideloading; it cannot update an APK signed with another key."
+          fi
           version=$(sed -n 's/.*versionName "\(.*\)".*/\1/p' android/app/build.gradle)
           mkdir dist
           cp "$apk" "dist/metroid-prime2-port-$version-${GITHUB_SHA::9}.apk"
