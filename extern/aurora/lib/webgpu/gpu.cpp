@@ -1097,7 +1097,7 @@ static bool initialize_once(AuroraBackend auroraBackend, bool allowCpu) {
     dawn::native::opengl::RequestAdapterOptionsGetGLProc getGLProcOptions;
     const wgpu::ChainedStruct* adapterOptionsChain = nullptr;
     const char* videoDriver = SDL_GetCurrentVideoDriver();
-    const bool useSDLKmsdrmEGL = videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0 &&
+    const bool useSDLKmsdrmEGL = videoDriver != nullptr && SDL_strcasecmp(videoDriver, "kmsdrm") == 0 &&
                                  (backend == wgpu::BackendType::OpenGL ||
                                   backend == wgpu::BackendType::OpenGLES);
     if (useSDLKmsdrmEGL) {
