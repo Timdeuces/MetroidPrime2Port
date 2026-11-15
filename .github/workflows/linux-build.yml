@@ -23,8 +23,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Timdeuces/dawn
+          ref: mpp
+          path: DawnKmsdrm
+          fetch-depth: 1
       - name: Dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-14 libasound2-dev libpulse-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl1-mesa-dev libgl-dev libfreetype-dev libpng-dev libudev-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-14 libsdl2-dev libasound2-dev libpulse-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libegl1-mesa-dev libgl-dev libfreetype-dev libpng-dev libudev-dev
       - uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
         with:
           key: linux-build
@@ -46,6 +52,8 @@ jobs:
           export CC=gcc-14 CXX=g++-14
           cmake -S . -B build/native -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DMP_SDK_HEADERS_ONLY=OFF -DAURORA_ENABLE_TESTS=ON \
+            -DAURORA_DAWN_PROVIDER=vendor \
+            -DFETCHCONTENT_SOURCE_DIR_DAWN="$GITHUB_WORKSPACE/DawnKmsdrm" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       # Build, the port's tests and the GX FIFO regressions.
       - uses: ./.github/actions/build-and-test
