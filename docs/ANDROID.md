@@ -12,8 +12,10 @@ milestone logs and the risk list (written 2026-10-17, when nothing was built) ar
 -> `android/app/build/outputs/apk/release/app-release.apk`. `tools/android_probe.sh` cross-builds only
 the native `.so`. CI: `.github/workflows/android.yml` (started by hand; see [RELEASING.md](RELEASING.md)).
 Native build: AGP `externalNativeBuild` over the top-level `CMakeLists.txt`; Dawn comes from the pinned
-prebuilt `android-aarch64` package (`build/android-deps/dawn_prebuilt` when present, else downloaded)
-and SDL3 from vendored sources.
+prebuilt `android-aarch64` package (`build/android-deps/dawn_prebuilt`) and SDL3 from vendored sources.
+The original Dawn release host is unavailable, so local builds need a compatible package in that
+cache (or `-PcmakeDependencyCache=<dir>`). The APK workflow builds the pinned Dawn commit from the
+`Timdeuces/dawn` fork into the cache; the first run is slower, and subsequent runs reuse the package.
 
 ## Signing
 

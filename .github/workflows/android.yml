@@ -39,6 +39,49 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
+      # The original Dawn release host is unavailable. Build the same pinned
+      # commit from our fork using Dawn's Android release configuration instead.
+      - name: Resolve Dawn revision
+        id: dawn
+        run: |
+          ref=$(sed -n 's/^_aurora_dependency_version(AURORA_DAWN_REF "\([0-9a-f]*\)".*/\1/p' extern/aurora/cmake/AuroraDependencyVersions.cmake)
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Restore Android Dawn package
+        id: dawn-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/android-deps/dawn_prebuilt
+          key: dawn-android-${{ steps.dawn.outputs.ref }}-ndk-${{ env.NDK_VERSION }}-${{ hashFiles('.github/workflows/android.yml') }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.dawn-cache.outputs.cache-hit != 'true'
+        with:
+          repository: Timdeuces/dawn
+          ref: ${{ steps.dawn.outputs.ref }}
+          path: build/dawn-src
+      - name: Build Android Dawn package
+        if: steps.dawn-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libwayland-dev libxkbcommon-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev mesa-common-dev libx11-xcb-dev
+          cmake="$ANDROID_HOME/cmake/3.31.5/bin/cmake"
+          src="$GITHUB_WORKSPACE/build/dawn-src"
+          "$cmake" -S "$src" -B build/dawn-host -G Ninja \
+            -C "$src/.github/workflows/dawn-ci.cmake" -DCMAKE_BUILD_TYPE=Release
+          "$cmake" --build build/dawn-host --target protoc --config Release
+          "$cmake" -S "$src" -B build/dawn-android -G Ninja \
+            -C "$src/.github/workflows/dawn-ci.cmake" -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DPROTOC_EXECUTABLE="$GITHUB_WORKSPACE/build/dawn-host/protoc"
+          "$cmake" --build build/dawn-android --config Release
+          "$cmake" --install build/dawn-android --config Release \
+            --prefix "$GITHUB_WORKSPACE/build/android-deps/dawn_prebuilt"
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --strip-debug \
+            build/android-deps/dawn_prebuilt/lib/libwebgpu_dawn.a
       # Use the release key when available; otherwise make a clearly labeled
       # debug-signed APK that cannot update a release installation.
       - name: Build
