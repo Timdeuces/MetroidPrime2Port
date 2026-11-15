@@ -35,7 +35,7 @@
 #include "MetroidPrime/Player/CGameState.hpp"
 #include "MetroidPrime/Player/CPlayerState.hpp"
 
-#include <SDL3/SDL.h>
+#include <SDL2/SDL.h>
 #include <aurora/aurora.h>
 #include <aurora/gfx.h>
 #include <dolphin/vi.h>
