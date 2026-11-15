@@ -110,6 +110,11 @@ int main() {
   // This is the mapping test. A wrong mapping shows up as some OTHER button
   // being down, and the message names both so a failure says what went where.
   for (int raw = 0; raw < SDL_CONTROLLER_BUTTON_MAX; ++raw) {
+    if (raw == SDL_CONTROLLER_BUTTON_TOUCHPAD &&
+        SDL_GameControllerHasButton(gamepad, SDL_CONTROLLER_BUTTON_TOUCHPAD) != SDL_TRUE) {
+      std::printf("SKIP: this SDL2 runtime does not expose the virtual touchpad button\n");
+      continue;
+    }
     SDL_JoystickSetVirtualButton(pad.handle, raw, SDL_PRESSED);
     SDL_JoystickUpdate();
     for (int logical = 0; logical < SDL_CONTROLLER_BUTTON_MAX; ++logical) {
