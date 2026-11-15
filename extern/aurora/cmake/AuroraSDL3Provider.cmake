@@ -161,6 +161,8 @@ elseif (_aurora_sdl3_provider STREQUAL "vendor")
       COMMAND ${CMAKE_COMMAND} -DSDL_SOURCE_DIR=<SOURCE_DIR>
         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-kmsdrm-egl-diagnostics.cmake"
       COMMAND ${CMAKE_COMMAND} -DSDL_SOURCE_DIR=<SOURCE_DIR>
+        -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-kmsdrm-atomic-diagnostics.cmake"
+      COMMAND ${CMAKE_COMMAND} -DSDL_SOURCE_DIR=<SOURCE_DIR>
         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-egl-init-diagnostics.cmake"
       COMMAND ${CMAKE_COMMAND} -DSDL_SOURCE_DIR=<SOURCE_DIR>
         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-egl-platform-diagnostics.cmake"
