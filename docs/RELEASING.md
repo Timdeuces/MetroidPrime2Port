@@ -35,7 +35,7 @@ into the executable (`MP_EMBED_RESOURCES`, MP1 `ce0bf885e`). Only the APK ships 
 | `windows.yml` | manual | clang-cl, x64 and arm64 (`windows-11-arm`); artifacts `metroid_prime2_port-windows[-arm64]` (`dist/`) |
 | `macos.yml` | manual | arm64, ad-hoc signed `Metroid Prime 2 Port.app` + `licenses/`, artifact `metroid_prime2_port-macos`; checks system-only dylibs, codesign and the packaged no-disc startup |
 | `ios.yml` | manual | unsigned `MetroidPrime2Port.ipa` (iphoneos, ad hoc signed inside; users sideload it), artifact `metroid_prime2_port-ios`; checks system-only libraries |
-| `android.yml` | manual | release APK signed with this project's key, artifact `android-apk`; fails on any other signer |
+| `android.yml` | manual | release-key-signed APK as `android-apk`, or a debug-signed APK as `android-apk-debug-signed` when no signing secrets are available |
 | `cache-prune.yml` | after the build workflows | keeps the newest cache entry per key family |
 | `build.yml.disable` | never | upstream's matching-decomp CI; needs the retail DOL, which this repository cannot have |
 
@@ -54,9 +54,11 @@ Releases are signed with this project's own key (`android/keystore.jks` + `keyst
 both untracked; `tools/make_android_keystore.sh` made them). Its SHA-256 is
 `5c380a13d5bfc5c57a093a22d2ec70d62109a927f76b0bf7fe61db7d5428bd20`; `android.yml` checks it. CI
 gets the key from the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
-`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Android treats another signer as another app (an
-update would need an uninstall, which deletes the save), so never sign a release with anything
-else. The app id is `org.metroidprime2.port`.
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. With all four absent, CI builds a debug-signed APK,
+labels its artifact and filename `debug-signed`, and warns that it cannot update a release install.
+Partial secret configurations fail. Android treats another signer as another app (an update would
+need an uninstall, which deletes the save), so never ship a release signed with anything else.
+Debug keys generated on different runners can also differ. The app id is `org.metroidprime2.port`.
 
 ## Version
 
@@ -100,7 +102,7 @@ assets/initial_pipeline_cache.db` and its merge line add it without a full re-re
      the `.app` and `licenses/` as `metroid-prime2-port-X-macos-arm64.zip`.
    - Flatpak: `tools/make_flatpak.sh` (committed `port` branch), shipped as `MetroidPrime2Port.flatpak`.
    - Android: `gh workflow run android.yml --ref port -R Odrannnn/MetroidPrime2Port`, download
-     `android-apk`, ship as `metroid-prime2-port-X-android-arm64.apk`.
+     `android-apk` (not `android-apk-debug-signed`), ship as `metroid-prime2-port-X-android-arm64.apk`.
    - iOS: `gh workflow run ios.yml --ref port -R Odrannnn/MetroidPrime2Port`, download
      `metroid_prime2_port-ios`, ship `MetroidPrime2Port.ipa` as is (unsigned, experimental).
 3. Crash soak the release commit: `python3 tools/mpsoak.py --evidence-dir build/s-release-<date>/soak

@@ -19,9 +19,11 @@ and SDL3 from vendored sources.
 
 `tools/make_android_keystore.sh` writes `android/keystore.jks` and `android/keystore.properties` (both
 git-ignored); CI passes the same four values as `MP_APK_KEYSTORE`, `MP_APK_KEYSTORE_PASSWORD`,
-`MP_APK_KEY_ALIAS`, `MP_APK_KEY_PASSWORD`. With no key, `android_apk.sh` signs with the shared debug key
-only when asked (`-PmpDebugSigning=true`) and otherwise refuses; `build.gradle` refuses a
-half-configured key. Android will not replace a package signed with another certificate, and
+`MP_APK_KEY_ALIAS`, `MP_APK_KEY_PASSWORD`. With no key, `android_apk.sh` opts into debug signing;
+pass `--strict-signing` to refuse it. CI uses strict signing when all secrets are configured and
+otherwise labels its debug-signed artifact; a partial configuration fails. `build.gradle` refuses a
+half-configured key. Debug keys generated on different runners can differ. Android will not replace
+a package signed with another certificate, and
 uninstalling deletes the app's data (`files/disc.iso`, `files/user/`, `touch.cfg`, `port_paths.txt`), so
 re-pick the ISO and copy saves back. Keep the key: losing it loses in-place updates.
 
