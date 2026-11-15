@@ -97,7 +97,7 @@ std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Wind
   return std::move(desc);
 #elif defined(__linux__)
   const char* driver = SDL_GetCurrentVideoDriver();
-  if (driver != nullptr && std::strcmp(driver, "kmsdrm") == 0) {
+  if (driver != nullptr && SDL_strcasecmp(driver, "kmsdrm") == 0) {
     auto desc = std::make_shared<wgpu::SurfaceSourceKmsdrm>();
     desc->userdata = window;
     desc->createSurface = create_kmsdrm_surface;

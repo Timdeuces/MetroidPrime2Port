@@ -361,7 +361,7 @@ bool create_window(AuroraBackend backend) {
 #endif
 #if defined(__linux__)
   const char* videoDriver = SDL_GetCurrentVideoDriver();
-  if (videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0) {
+  if (videoDriver != nullptr && SDL_strcasecmp(videoDriver, "kmsdrm") == 0) {
     flags |= SDL_WINDOW_FULLSCREEN;
     if (backend == BACKEND_VULKAN) {
       flags |= SDL_WINDOW_VULKAN;
@@ -423,7 +423,7 @@ bool create_window(AuroraBackend backend) {
       g_window = nullptr;
       return false;
     }
-    if (videoDriver != nullptr && SDL_strcmp(videoDriver, "kmsdrm") == 0) {
+    if (videoDriver != nullptr && SDL_strcasecmp(videoDriver, "kmsdrm") == 0) {
       using EGLGetCurrentSurfaceProc = void* (SDLCALL *)(unsigned int);
       using EGLGetCurrentDisplayProc = void* (SDLCALL *)(void);
       const auto getCurrentSurface = reinterpret_cast<EGLGetCurrentSurfaceProc>(
@@ -653,7 +653,7 @@ bool make_kmsdrm_gl_context_current(bool current) noexcept {
   if (g_window == nullptr || g_glContext == nullptr) {
     return false;
   }
-  return SDL_GL_MakeCurrent(current ? g_window : nullptr, current ? g_glContext : nullptr);
+  return SDL_GL_MakeCurrent(current ? g_window : nullptr, current ? g_glContext : nullptr) == 0;
 }
 
 const void* get_native_window_handle() noexcept {
