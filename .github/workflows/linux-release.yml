@@ -52,7 +52,7 @@ jobs:
             libdrm-devel mesa-libgbm-devel \
             freetype-devel libpng-devel zlib-devel bzip2-devel brotli-devel \
             libzstd-devel openssl-devel ccache \
-            systemd-devel libusb1-devel
+            systemd-devel libusb1-devel SDL2-devel
           python3 -m pip install --user --upgrade "ninja>=1.11"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,6 +92,8 @@ jobs:
         run: |
           source /opt/rh/gcc-toolset-14/enable
           cmake --build build/port-gcc -j 4
+          cc $(sdl2-config --cflags) tools/sdl2_kmsdrm_probe.c \
+            -o build/port-gcc/sdl2_kmsdrm_probe $(sdl2-config --libs)
           ccache -s
       # The settings self-test runs the game binary, so it is a real link check
       # as well as a test.
@@ -148,6 +150,7 @@ jobs:
           d=build/release/metroid-prime2-port-linux-${{ matrix.arch }}
           mkdir -p "$d/share/licenses/metroid-prime2-port"
           cp build/port-gcc/metroid_prime2_port "$d/"
+          cp build/port-gcc/sdl2_kmsdrm_probe "$d/"
           bash tools/collect_licenses.sh build/port-gcc "$d/share/licenses/metroid-prime2-port"
           tar -C build/release -czf build/release/metroid-prime2-port-linux-${{ matrix.arch }}.tar.gz \
             metroid-prime2-port-linux-${{ matrix.arch }}
