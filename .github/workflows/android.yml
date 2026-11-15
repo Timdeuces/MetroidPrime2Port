@@ -39,31 +39,59 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
-      # Signed with the project's own key, so the APK installs over a release
-      # without an uninstall (which would delete the save).
+      # Use the release key when available; otherwise make a clearly labeled
+      # debug-signed APK that cannot update a release installation.
       - name: Build
+        id: build
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           MP_APK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           MP_APK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           MP_APK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
         run: |
-          export MP_APK_KEYSTORE="$RUNNER_TEMP/release.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$MP_APK_KEYSTORE"
-          bash tools/android_apk.sh --strict-signing :app:assembleRelease
-          rm -f "$MP_APK_KEYSTORE"
-      # A different signer would make Android treat the APK as another app.
-      - name: Check the signer
+          if [[ -z "$KEYSTORE_BASE64" && -z "$MP_APK_KEYSTORE_PASSWORD" && -z "$MP_APK_KEY_ALIAS" && -z "$MP_APK_KEY_PASSWORD" ]]; then
+            echo "::warning::No Android signing secrets available; the debug-signed APK cannot update a release installation."
+            bash tools/android_apk.sh :app:assembleRelease
+            echo "signing=debug" >> "$GITHUB_OUTPUT"
+          else
+            if [[ -z "$KEYSTORE_BASE64" || -z "$MP_APK_KEYSTORE_PASSWORD" || -z "$MP_APK_KEY_ALIAS" || -z "$MP_APK_KEY_PASSWORD" ]]; then
+              echo "::error::Android signing secrets are incomplete; configure all four or remove them all."
+              exit 1
+            fi
+            export MP_APK_KEYSTORE="$RUNNER_TEMP/release.jks"
+            trap 'rm -f "$MP_APK_KEYSTORE"' EXIT
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$MP_APK_KEYSTORE"
+            test -s "$MP_APK_KEYSTORE"
+            bash tools/android_apk.sh --strict-signing :app:assembleRelease
+            echo "signing=release" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify and package APK
+        shell: bash
+        env:
+          SIGNING: ${{ steps.build.outputs.signing }}
         run: |
           apk=android/app/build/outputs/apk/release/app-release.apk
           digest=$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           echo "signer: $digest"
-          test "$digest" = 5c380a13d5bfc5c57a093a22d2ec70d62109a927f76b0bf7fe61db7d5428bd20
+          test -n "$digest"
+          if [[ "$SIGNING" == release ]]; then
+            if [[ "$digest" != 5c380a13d5bfc5c57a093a22d2ec70d62109a927f76b0bf7fe61db7d5428bd20 ]]; then
+              echo "::error::APK was not signed with the project's release key."
+              exit 1
+            fi
+            suffix=
+          elif [[ "$SIGNING" == debug ]]; then
+            suffix=-debug-signed
+          else
+            echo "::error::Unknown APK signing mode: $SIGNING"
+            exit 1
+          fi
           version=$(sed -n 's/.*versionName "\(.*\)".*/\1/p' android/app/build.gradle)
-          mkdir dist
-          cp "$apk" "dist/metroid-prime2-port-$version-${GITHUB_SHA::9}.apk"
+          mkdir -p dist
+          cp "$apk" "dist/metroid-prime2-port-$version-${GITHUB_SHA::9}${suffix}.apk"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: android-apk
+          name: ${{ steps.build.outputs.signing == 'debug' && 'android-apk-debug-signed' || 'android-apk' }}
           path: dist/*.apk
           if-no-files-found: error
